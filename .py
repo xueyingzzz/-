@@ -3,7 +3,7 @@ import datetime
 import math
 from datetime import timedelta, date
 import matplotlib.pyplot as plt
-import ssdata
+import ssdata 
 #data=ssdata.get_data(secid='000001.XSHE',start_date='2017-01-01',end_date='2017-02-01',field='pb')
 #print(data)
 
