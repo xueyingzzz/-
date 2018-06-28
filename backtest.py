@@ -38,9 +38,11 @@ def handle_data(date):
         today_data=today_data.append(data)   
         
     today_data=today_data[np.isnan(today_data['yoyop']) == False]
+    today_data=today_data[today_data['yoyop']>0]
+    
     # 降序排列所选数据
     today_data['value']=today_data['yoyop']
-    # 选出20只标的
+    # 选出标的
     today_data = today_data.sort_values('value',ascending = False)[:5]
     
     #print (today_data)
@@ -192,7 +194,6 @@ for date in trade_days:
     
     # 输出持仓详情
     h_amount.to_csv('持仓详情.csv')
-    print (h_amount)
    
     #capital.append (position + cash) 
     capital.append(today_capital)
