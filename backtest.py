@@ -43,7 +43,7 @@ def handle_data(date):
     # 选出20只标的
     today_data = today_data.sort_values('value',ascending = False)[:5]
     
-    print (today_data)
+    #print (today_data)
     # 买入列表
     buylist=list(today_data['secid'])
     
@@ -65,7 +65,7 @@ def handle_data(date):
 ########################   定义回测参数   ##########################
 
 # 起始日截止日,必须属于交易日列表
-start_date='2014-01-01'
+start_date='2017-02-01'
 end_date='2018-06-01'
 # 股票池（创新层全部股票）
 #data_list = ['430002.OC']
@@ -107,7 +107,7 @@ for date in trade_days:
         today_capital=0
         # 如果调仓，更新买入列表  
         stock_list = handle_data(date)
-        #print (date,stock_list)
+        print (date,stock_list)
 
         # 如果首次运行，定义 h_amount 持仓数据为0
         if n == 0:
@@ -131,11 +131,11 @@ for date in trade_days:
                 # 卖出股票后现金增加，持仓减少
                 cash = cash + h_amount.loc[stock,'hamount']*(price-0.01)*(1-tax-commission)
                 position = position -  h_amount.loc[stock,'hamount']*(price-0.01)
-                print ('order:',stock,'amount',int(h_amount.loc[stock,'hamount'] ))            
+                print ('order:',stock,'amount',int(0-h_amount.loc[stock,'hamount']))            
                 # 持仓数据数据删除该股票
-                h_amount.drop(stock)
+                h_amount=h_amount.drop(stock)
         
-        # 更新总资产现金部分        
+        # 更新总资产现金部分  
         today_capital+=cash
         
         # 处理买入列表中的股票
@@ -192,6 +192,7 @@ for date in trade_days:
     
     # 输出持仓详情
     h_amount.to_csv('持仓详情.csv')
+    print (h_amount)
    
     #capital.append (position + cash) 
     capital.append(today_capital)
