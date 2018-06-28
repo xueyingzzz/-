@@ -79,6 +79,8 @@ position = 0.
 cash = capital[0]
 # 设置调仓频率
 freq=1
+tax=0.001
+commission = 0.00025
 
 
 # 历史最大回撤初始值
@@ -96,10 +98,9 @@ n=0
 for date in (trade_days):
     date=date.strftime('%Y-%m-%d')
     position =0
-    
     # 判断是否调仓
     if n % freq == 0 :
-        
+        today_capital=0
         # 如果调仓，更新买入列表  
         stock_list = handle_data(date)
         #print (date,stock_list)
@@ -107,21 +108,31 @@ for date in (trade_days):
         # 如果首次运行，定义 h_amount 持仓数据为0
         if n == 0:
             h_amount=pd.DataFrame({'hamount':[0],'price':[0],'value':[0]},index=stock_list)
-
+        
+        
+        
         # 每次调仓更新目标持股
         t_amount=pd.DataFrame({'tamount':[0]},index=stock_list)
         
         # 卖出在持仓但不在买入列表中的股票
         for stock in list(h_amount.index):
+            
+            stock_data=ssdata.get_data(secid=stock,start_date=date,end_date=date,field='open') 
+            price=stock_data['open'].values.tolist()[0]#*stock_data['tafactor'][date]
+            # 更新总资产股票部分
+            today_capital+= price* h_amount.loc[stock,'hamount']
+            
             if stock not in stock_list:
-                # 为了使回测保持准确性，股价为开盘价*复权因子。
-                stock_data=ssdata.get_data(secid=stock,start_date=date,end_date=date,field='open') 
-                price=stock_data['open'].values.tolist()[0]#*stock_data['tafactor'][date]
+                
                 # 卖出股票后先进增加，持仓减少
-                cash = cash + h_amount.loc[stock,'hamount']*price
-                position = position -  h_amount.loc[stock,'hamount']*price
+                cash = cash + h_amount.loc[stock,'hamount']*(price-0.01)*(1-tax-commission)
+                position = position -  h_amount.loc[stock,'hamount']*(price-0.01)
+                print ('order:',stock,'amount',int(t_amount.loc[stock,'tamount'] ))            
                 # 持仓数据数据删除该股票
                 h_amount.drop(stock)
+        
+        # 更新总资产现金部分        
+        today_capital+=cash
         
         # 处理买入列表中的股票
         for stock in stock_list:
@@ -132,11 +143,11 @@ for date in (trade_days):
             # 如果买入列表包含现有持仓没有的股票，在持仓列表中加入该股票，仓位为0
             if stock not in list(h_amount.index):
                 h_amount=h_amount.append(pd.DataFrame({'hamount':[0],'price':[0],'value':[0],'percent':[0]},index=[stock]))
-
+                
             # 个股目标仓位
             #t_position = target1.loc[i,'position']  # PB策略
-            t_position = 1.0/len(stock_list)   # 平均配置策略
-
+            #t_position = 1.0/len(stock_list)   # 平均配置策略
+            t_position = 1.0/2
 
             if t_position > 1.:
                 t_position = 1.
@@ -144,12 +155,13 @@ for date in (trade_days):
                 t_position =0.
 
             # 目标股数。个股可用资金x仓位/股价 ，并取100的整数。   
-            tamount =((capital[-1]/len(stock_list))*t_position)/(price)
+            tamount =(today_capital*t_position)/(price)
             t_amount.loc[stock,'tamount']=math.floor(tamount/100)*100
             
             # 如果持仓数量大于目标数量，要卖出。
             if h_amount.loc[stock,'hamount'] - t_amount.loc[stock,'tamount'] >0:  
-                cash = cash + (h_amount.loc[stock,'hamount']- t_amount.loc[stock,'tamount'])*(price)
+                cash = cash + (h_amount.loc[stock,'hamount']- t_amount.loc[stock,'tamount'])*(price-0.01)*(1-tax-commission)
+                position += t_amount.loc[stock,'tamount'] *(price-0.01)
                 
             # 如果持仓数量大于目标数量，要买入。
             if h_amount.loc[stock,'hamount'] - t_amount.loc[stock,'tamount']<0: 
@@ -157,16 +169,19 @@ for date in (trade_days):
                 # 从目标手数逐渐减少尝试成交，防止现金为负
                 for number in range(int(t_amount.loc[stock,'tamount']/100),0,-1):
                     # 如果现金不够，逐渐减少买入手数
-                    if cash - (number*100-h_amount.loc[stock,'hamount'])*price < 0 :
+                    if cash - (number*100-h_amount.loc[stock,'hamount'])*(price+0.01)*(1+commission) < 0 :
                         continue
                     else:
-                        cash = cash - (number*100-h_amount.loc[stock,'hamount'])*(price)
+                        cash = cash - (number*100-h_amount.loc[stock,'hamount'])*(price+0.01)*(1+commission)
                         t_amount.loc[stock,'tamount']= number*100.
+                        position += t_amount.loc[stock,'tamount'] *(price+0.01)
                         break
-    #             if h_amount.loc[stock,'hamount'] - t_amount.loc[stock,'tamount'] !=0:
-    #                 print ('order:',stock,'amount',int(t_amount.loc[stock,'tamount'] -  h_amount.loc[stock,'hamount']))            
+            if h_amount.loc[stock,'hamount'] - t_amount.loc[stock,'tamount']==0: 
+                position = today_capital - cash
+                
+            if h_amount.loc[stock,'hamount'] - t_amount.loc[stock,'tamount'] !=0:
+                  print ('order:',stock,'amount',int(t_amount.loc[stock,'tamount'] -  h_amount.loc[stock,'hamount']))            
             # 持仓数据更新。
-            position += h_amount.loc[stock,'hamount']*(price)+(t_amount.loc[stock,'tamount'] -  h_amount.loc[stock,'hamount'])*(price)
             h_amount.loc[stock,'hamount'] = t_amount.loc[stock,'tamount'] 
             h_amount.loc[stock,'price']= price
             h_amount.loc[stock,'value']=h_amount.loc[stock,'price']*h_amount.loc[stock,'hamount']
@@ -176,6 +191,7 @@ for date in (trade_days):
     #print (h_amount)
    
     capital.append (position + cash) 
+   
     n+=1
     
     # 收益明细
@@ -211,7 +227,7 @@ for date in (trade_days):
 %matplotlib inline 
 ret.to_csv('回测结果.csv')
 ret['rev'].plot(color='firebrick',label='策略收益')
-#ret['benchmark'].plot(color='royalblue',label='基准收益')
+ret['benchmark'].plot(color='royalblue',label='基准收益')
 n=len((ret.index).values)
 x_tick = []
 for i in range(n-1):                      # 遍历日期数目
@@ -223,8 +239,8 @@ plt.xticks(range(len(x_tick)), x_tick,rotation = -60,fontsize=9)
 plt.xlim(0,len(x_tick))      
 #plt.axhline(0,ls='-',color='black')
 x=np.array(range(n))
-#plt.fill_between(x,max(max(ret.rev),max(ret.benchmark)),min(min(ret.rev),min(ret.benchmark)),where=((x<(list(target1.index).index(drawdown_end)))&(x>(list(target1.index).index(drawdown_start)))),facecolor='lightsteelblue',alpha=0.4) #  回撤区间
-plt.fill_between(x,max(ret.rev),min(ret.rev),where=((x<(trade_days.index(drawdown_end)))&(x>trade_days.index(drawdown_start))),facecolor='lightsteelblue',alpha=0.4) #  回撤区间
+plt.fill_between(x,max(max(ret.rev),max(ret.benchmark)),min(min(ret.rev),min(ret.benchmark)),where=((x<(trade_days.index(drawdown_end)))&(x>trade_days.index(drawdown_start))),facecolor='lightsteelblue',alpha=0.4) #  回撤区间
+#plt.fill_between(x,max(ret.rev),min(ret.rev),where=((x<(trade_days.index(drawdown_end)))&(x>trade_days.index(drawdown_start))),facecolor='lightsteelblue',alpha=0.4) #  回撤区间
 
 plt.legend()
 
@@ -241,8 +257,8 @@ Ra=((1+(ret.iloc[-1].rev))**(250/(n*20)))-1
 print (data_list)
 print (start_date,'至',end_date,'￥'+str(capital[0]))
 print ('调仓频率每月第一个个交易日')
-print ('基准收益','策略收益','策略年化收益','最大回撤','最大回撤区间')
-print ('',('%.2f%%' % (ret.iloc[-1].benchmark * 100)),('%.2f%%' % (ret.iloc[-1].rev * 100)),('%.2f%%' % (Ra* 100)),'',
-    ('%.2f%%' % (ret.iloc[-1].max_drawdown * 100)),'',str(drawdown_start)+'到'+str(drawdown_end))
+print ('基准收益','策略收益','策略年化收益','最大回撤','  ','最大回撤区间')
+print ('',('%.2f%%' % (ret.iloc[-1].benchmark * 100)),('%.2f%%' % (ret.iloc[-1].rev * 100)),'  ',('%.2f%%' % (Ra* 100)),'   ',
+    ('%.2f%%' % (ret.iloc[-1].max_drawdown * 100)),'  ',(drawdown_start.strftime('%Y-%m-%d'))+'到'+(drawdown_end.strftime('%Y-%m-%d')))
 
 
