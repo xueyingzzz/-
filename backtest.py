@@ -57,9 +57,9 @@ def handle_data(date):
     # 降序排列所选数据
     today_data['value']=today_data['yoyop']
     # 选出标的
-    today_data = today_data.sort_values('value',ascending = False)[:5]
+    today_data = today_data.sort_values('value',ascending = False)[:50]
     
-    print (today_data)
+    #print (today_data)
     # 买入列表
     buylist=list(today_data['secid'])
     
@@ -137,6 +137,7 @@ for date in trade_days:
     if n % freq == 0 :
         if n==0:
             ini_dic=initialize(date)
+            
         
         # 如果调仓，更新买入列表  
         stock_list = handle_data(date)
@@ -269,19 +270,29 @@ for date in trade_days:
 ret.to_csv('收益详情.csv')
 ret['rev'].plot(color='firebrick',label='策略收益')
 ret['benchmark'].plot(color='royalblue',label='基准收益')
-# n=len((ret.index).values)
-# x_tick = []
-# for i in range(n-1):                      # 遍历日期数目
-#     if i%(10) == 0:                                            # 每三十个交易日期生成一个图例
-#         x_tick.append(pd.to_datetime(str((ret.index).values[i])).replace(tzinfo=None).strftime('%Y-%m-%d'))
-#     else: 
-#         x_tick.append("")                                  # 其余图例为空值        
-# plt.xticks(range(len(x_tick)), x_tick,rotation = -60,fontsize=9)
-# plt.xlim(0,len(x_tick))      
-# #plt.axhline(0,ls='-',color='black')
-# x=np.array(range(n))
-# #plt.fill_between(x,max(max(ret.rev),max(ret.benchmark)),min(min(ret.rev),min(ret.benchmark)),where=((x<(trade_days.index(drawdown_end)))&(x>trade_days.index(drawdown_start))),facecolor='lightsteelblue',alpha=0.4) #  回撤区间
-# plt.fill_between(x,max(ret.rev),min(ret.rev),where=((x<=(trade_days.index(drawdown_end)))&(x>=trade_days.index(drawdown_start))),facecolor='lightsteelblue',alpha=0.4) #  回撤区间
+x=np.array(list(ret.index))
+plt.fill_between(x,max(max(ret.rev),max(ret.benchmark)),min(min(ret.rev),min(ret.benchmark)),where=((x<=(drawdown_end))&(x>=(drawdown_start))),facecolor='lightsteelblue',alpha=0.4) 
+plt.legend()
+
+########输出结果
+
+Ra=((1+(ret.iloc[-1].rev))**(250/(n*20)))-1
+# 如果每天更新可以运行以下数据
+# Rf=0.04
+# beta= round(ret['return_daily'].cov(ret['benchmark_daily'])/ret['benchmark_daily'].var(),2)
+# alpha =round(Ra-(Rf+beta*(Ra-Rf)),2)
+# volatility=((ret['return_daily'].var(ddof = 0))*250)**0.5
+# sharpe=round((Ra-Rf)/volatility,2)
+
+
+#print ('基准收益','策略收益','策略年化收益','最大回撤','  ','最大回撤区间')
+#print ('',('%.2f%%' % (ret.iloc[-1].benchmark * 100)),('%.2f%%' % (ret.iloc[-1].rev * 100)),'  ',('%.2f%%' % (Ra* 100)),'   ',
+#    ('%.2f%%' % (ret.iloc[-1].max_drawdown * 100)),'  ',(drawdown_start.strftime('%Y-%m-%d'))+'到'+(drawdown_end.strftime('%Y-%m-%d')))
+
+%matplotlib inline 
+ret.to_csv('收益详情.csv')
+ret['rev'].plot(color='firebrick',label='策略收益')
+ret['benchmark'].plot(color='royalblue',label='基准收益')
 x=np.array(list(ret.index))
 plt.fill_between(x,max(max(ret.rev),max(ret.benchmark)),min(min(ret.rev),min(ret.benchmark)),where=((x<=(drawdown_end))&(x>=(drawdown_start))),facecolor='lightsteelblue',alpha=0.4) 
 plt.legend()
@@ -300,16 +311,8 @@ Ra=((1+(ret.iloc[-1].rev))**(250/(n*20)))-1
 print ('')
 print (start_date,'至',end_date,'￥'+str(capital[0]))
 print ('调仓频率每'+str(freq)+'个月第1个交易日')
-#print ('基准收益','策略收益','策略年化收益','最大回撤','  ','最大回撤区间')
-#print ('',('%.2f%%' % (ret.iloc[-1].benchmark * 100)),('%.2f%%' % (ret.iloc[-1].rev * 100)),'  ',('%.2f%%' % (Ra* 100)),'   ',
-#    ('%.2f%%' % (ret.iloc[-1].max_drawdown * 100)),'  ',(drawdown_start.strftime('%Y-%m-%d'))+'到'+(drawdown_end.strftime('%Y-%m-%d')))
 
-
-pd.DataFrame({
-    '基准收益':('%.2f%%' % (ret.iloc[-1].benchmark * 100)),
-              '策略收益':('%.2f%%' % (ret.iloc[-1].rev * 100)),
-             '策略年化收益':('%.2f%%' % (Ra* 100)),
-             '最大回撤':('%.2f%%' % (ret.iloc[-1].max_drawdown * 100)),
-             '最大回撤区间':str((drawdown_start.strftime('%Y-%m-%d'))+'到'+(drawdown_end.strftime('%Y-%m-%d')))
-              
-             },index=[''])
+df=pd.DataFrame({'基准收益':('%.2f%%' % (ret.iloc[-1].benchmark * 100)), '策略收益':('%.2f%%' % (ret.iloc[-1].rev * 100)), 
+    '策略年化收益':('%.2f%%' % (Ra* 100)),'最大回撤':('%.2f%%' % (ret.iloc[-1].max_drawdown * 100)),
+   '最大回撤区间':str((drawdown_start.strftime('%Y-%m-%d'))+'到'+(drawdown_end.strftime('%Y-%m-%d')))},index=[''])
+df.reindex_axis(['基准收益', '策略收益', '策略年化收益','最大回撤', '最大回撤区间'],axis=1)
